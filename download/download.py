@@ -30,7 +30,7 @@ def get_forecast_from_silam_zarr(date_str, modality, day, version="v5_7_1"):
         os.makedirs(os.path.dirname(tmp_file))
 
     def download(bucket_name, key, dst_root="/tmp"):
-        """ Download zarr directory from S3 """
+        """Download zarr directory from S3"""
 
         resource = boto3.resource("s3")
         resource.meta.client.meta.events.register("choose-signer.s3.*", disable_signing)
@@ -46,7 +46,7 @@ def get_forecast_from_silam_zarr(date_str, modality, day, version="v5_7_1"):
     download(bucket_name, key)
 
     # read dataset from the downloaded file
-    ds = xr.open_zarr(tmp_file)
+    ds = xr.open_zarr(tmp_file, consolidated=False)
 
     return ds
 
@@ -90,9 +90,7 @@ def get_all_days_series(start_date, modality, lat, lon):
 
     def get_date_str(start_date):
         month_str = f'{start_date.month if len(str(start_date.month)) == 2 else f"0{start_date.month}"}'
-        day_str = (
-            f'{start_date.day if len(str(start_date.day)) == 2 else f"0{start_date.day}"}'
-        )
+        day_str = f'{start_date.day if len(str(start_date.day)) == 2 else f"0{start_date.day}"}'
         return f"{start_date.year}{month_str}{day_str}"
 
     # transform date into 8 digits (YYYYMMDD) string
