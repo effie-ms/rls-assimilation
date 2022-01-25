@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from RLSAssimilation import RLSAssimilation
-from helpers import plot_data, plot_errors, plot_errors_scatter
+from helpers import plot_data, plot_errors, plot_errors_scatter, print_metrics
 
 
 def demo_assimilation_and_plot(
@@ -59,8 +59,6 @@ def demo_assimilation_and_plot(
         err_assimilated_uncalibrated.append(err_assimilated_obs_uncalibrated)
 
     # plot and print metrics
-
-    # for calibrated:
     ax = plot_data(
         pd.Series(observations_source1, index=all_data_df.index),
         pd.Series(observations_source2, index=all_data_df.index),
@@ -70,10 +68,21 @@ def demo_assimilation_and_plot(
         ax,
     )
 
-    err1_calibrated, err2_calibrated = assimilator_with_calibration.get_assimilation_errors()
-    err1_uncalibrated, err2_uncalibrated = assimilator_without_calibration.get_assimilation_errors()
+    err1_calibrated = assimilator_with_calibration.source1.get_all_errors()
+    err2_calibrated = assimilator_with_calibration.source2.get_all_errors()
+    observations_source2_calibrated = (
+        assimilator_with_calibration.source2.get_corrected_data()
+    )
+
+    err1_uncalibrated = assimilator_without_calibration.source1.get_all_errors()
+    err2_uncalibrated = assimilator_without_calibration.source2.get_all_errors()
 
     ax_err, bx_err = plot_errors(
+        pd.Series(observations_source1, index=all_data_df.index).bfill(),
+        pd.Series(observations_source2, index=all_data_df.index).bfill(),
+        pd.Series(observations_source2_calibrated, index=all_data_df.index),
+        pd.Series(assimilated_calibrated, index=all_data_df.index),
+        pd.Series(assimilated_uncalibrated, index=all_data_df.index),
         pd.Series(err1_calibrated, index=all_data_df.index),
         pd.Series(err2_calibrated, index=all_data_df.index),
         pd.Series(err1_uncalibrated, index=all_data_df.index),
@@ -85,21 +94,24 @@ def demo_assimilation_and_plot(
         bx_err,
     )
 
-    assimilator_with_calibration.print_assimilation_metrics(
+    print(f"{variable} calibrated")
+    print_metrics(
         observations_source1,
         observations_source2,
         assimilated_calibrated,
+        err1_calibrated,
+        err2_calibrated,
         err_assimilated_calibrated,
-        variable,
-        'calibrated',
     )
-    assimilator_without_calibration.print_assimilation_metrics(
+
+    print(f"{variable} uncalibrated")
+    print_metrics(
         observations_source1,
         observations_source2,
         assimilated_uncalibrated,
+        err1_uncalibrated,
+        err2_uncalibrated,
         err_assimilated_uncalibrated,
-        variable,
-        'uncalibrated',
     )
 
     ax_err_scatter = plot_errors_scatter(
@@ -125,12 +137,8 @@ all_data_df.index = pd.to_datetime(list(all_data_df.index), format="%Y-%m-%d %H:
 all_data_df = all_data_df.sort_index()
 
 variables = ["CO", "NO2", "O3", "SO2", "PM2.5", "PM10"]
-fig_data, axs_data = plt.subplots(
-    nrows=3, ncols=2, figsize=(60, 45)
-)
-fig_err, axs_err = plt.subplots(
-    nrows=6, ncols=2, figsize=(60, 90)
-)
+fig_data, axs_data = plt.subplots(nrows=3, ncols=2, figsize=(60, 45))
+fig_err, axs_err = plt.subplots(nrows=6, ncols=2, figsize=(30, 50))
 fig_err_scatter, axs_err_scatter = plt.subplots(nrows=3, ncols=2, figsize=(40, 30))
 for idx, variable in enumerate(variables):
     (
@@ -147,6 +155,6 @@ for idx, variable in enumerate(variables):
         axs_err_scatter[idx % 3, idx % 2],
     )
 
-fig_data.savefig("plots/data.png")
-fig_err.savefig("plots/uncertainties.png")
-fig_err_scatter.savefig("plots/errors.png")
+fig_data.savefig("plots/data.jpg")
+fig_err.savefig("plots/uncertainties.jpg")
+fig_err_scatter.savefig("plots/errors.jpg")
