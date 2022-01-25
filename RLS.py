@@ -23,7 +23,7 @@ class RLS:
         X = np.reshape([1, x], (1, 2))  # reshape to a 1x2 matrix
         alpha = float(y - X @ self.w)
         g = (self.P @ X.T) / (1 + X @ self.P @ X.T)
-        self.error = abs(alpha)
+        self.error = alpha
         self.w = self.w + g * alpha
         self.P = self.P - g * X * self.P
 
