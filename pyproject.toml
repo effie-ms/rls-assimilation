@@ -1,0 +1,10 @@
+[tool.poetry]
+name = "rls-assimilation"
+version = "0.1.0"
+description = "RLS-based data assimilation"
+authors = ["Lizaveta Miasayedava <lizaveta.miasayedava@taltech.ee>"]
+
+[tool.poetry.dependencies]
+python = "*"
+numpy = "*"
+

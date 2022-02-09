@@ -1,8 +1,16 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from RLSAssimilation import RLSAssimilation
-from helpers import plot_data, plot_errors, plot_errors_scatter, print_metrics
+from rls_assimilation import RLSAssimilation
+from helpers import (
+    plot_data,
+    plot_uncertainties,
+    plot_data_pdf,
+    plot_uncertainty_pdf,
+    plot_data_cdf,
+    plot_uncertainty_cdf,
+    print_metrics,
+)
 
 
 def demo_assimilation_and_plot(
@@ -10,8 +18,10 @@ def demo_assimilation_and_plot(
     variable,
     ax,
     ax_err,
-    bx_err,
-    ax_err_scatter,
+    ax_data_pdf,
+    ax_unc_pdf,
+    ax_data_cdf,
+    ax_unc_cdf,
 ):
     observations_source1 = all_data_df[
         f"{variable}"
@@ -58,9 +68,14 @@ def demo_assimilation_and_plot(
         assimilated_uncalibrated.append(assimilated_obs_uncalibrated)
         err_assimilated_uncalibrated.append(err_assimilated_obs_uncalibrated)
 
+    observations_source2_calibrated = (
+        assimilator_with_calibration.source2.get_corrected_data()
+    )
+
     # plot and print metrics
     ax = plot_data(
         pd.Series(observations_source1, index=all_data_df.index),
+        pd.Series(observations_source2_calibrated, index=all_data_df.index),
         pd.Series(observations_source2, index=all_data_df.index),
         pd.Series(assimilated_calibrated, index=all_data_df.index),
         pd.Series(assimilated_uncalibrated, index=all_data_df.index),
@@ -70,28 +85,18 @@ def demo_assimilation_and_plot(
 
     err1_calibrated = assimilator_with_calibration.source1.get_all_errors()
     err2_calibrated = assimilator_with_calibration.source2.get_all_errors()
-    observations_source2_calibrated = (
-        assimilator_with_calibration.source2.get_corrected_data()
-    )
 
     err1_uncalibrated = assimilator_without_calibration.source1.get_all_errors()
     err2_uncalibrated = assimilator_without_calibration.source2.get_all_errors()
 
-    ax_err, bx_err = plot_errors(
-        pd.Series(observations_source1, index=all_data_df.index).bfill(),
-        pd.Series(observations_source2, index=all_data_df.index).bfill(),
-        pd.Series(observations_source2_calibrated, index=all_data_df.index),
-        pd.Series(assimilated_calibrated, index=all_data_df.index),
-        pd.Series(assimilated_uncalibrated, index=all_data_df.index),
-        pd.Series(err1_calibrated, index=all_data_df.index),
-        pd.Series(err2_calibrated, index=all_data_df.index),
+    ax_err = plot_uncertainties(
         pd.Series(err1_uncalibrated, index=all_data_df.index),
+        pd.Series(err2_calibrated, index=all_data_df.index),
         pd.Series(err2_uncalibrated, index=all_data_df.index),
         pd.Series(err_assimilated_calibrated, index=all_data_df.index),
         pd.Series(err_assimilated_uncalibrated, index=all_data_df.index),
         variable,
         ax_err,
-        bx_err,
     )
 
     print(f"{variable} calibrated")
@@ -114,20 +119,53 @@ def demo_assimilation_and_plot(
         err_assimilated_uncalibrated,
     )
 
-    ax_err_scatter = plot_errors_scatter(
+    ax_data_pdf = plot_data_pdf(
         pd.Series(observations_source1, index=all_data_df.index),
+        pd.Series(observations_source2_calibrated, index=all_data_df.index),
         pd.Series(observations_source2, index=all_data_df.index),
         pd.Series(assimilated_calibrated, index=all_data_df.index),
         pd.Series(assimilated_uncalibrated, index=all_data_df.index),
         variable,
-        ax_err_scatter,
+        ax_data_pdf,
+    )
+
+    ax_unc_pdf = plot_uncertainty_pdf(
+        pd.Series(err1_uncalibrated, index=all_data_df.index),
+        pd.Series(err2_uncalibrated, index=all_data_df.index),
+        pd.Series(err2_calibrated, index=all_data_df.index),
+        pd.Series(err_assimilated_uncalibrated, index=all_data_df.index),
+        pd.Series(err_assimilated_calibrated, index=all_data_df.index),
+        variable,
+        ax_unc_pdf,
+    )
+
+    ax_data_cdf = plot_data_cdf(
+        pd.Series(observations_source1, index=all_data_df.index),
+        pd.Series(observations_source2_calibrated, index=all_data_df.index),
+        pd.Series(observations_source2, index=all_data_df.index),
+        pd.Series(assimilated_calibrated, index=all_data_df.index),
+        pd.Series(assimilated_uncalibrated, index=all_data_df.index),
+        variable,
+        ax_data_cdf,
+    )
+
+    ax_unc_cdf = plot_uncertainty_cdf(
+        pd.Series(err1_uncalibrated, index=all_data_df.index),
+        pd.Series(err2_uncalibrated, index=all_data_df.index),
+        pd.Series(err2_calibrated, index=all_data_df.index),
+        pd.Series(err_assimilated_uncalibrated, index=all_data_df.index),
+        pd.Series(err_assimilated_calibrated, index=all_data_df.index),
+        variable,
+        ax_unc_cdf,
     )
 
     return (
         ax,
         ax_err,
-        bx_err,
-        ax_err_scatter,
+        ax_data_pdf,
+        ax_unc_pdf,
+        ax_data_cdf,
+        ax_unc_cdf,
     )
 
 
@@ -137,24 +175,35 @@ all_data_df.index = pd.to_datetime(list(all_data_df.index), format="%Y-%m-%d %H:
 all_data_df = all_data_df.sort_index()
 
 variables = ["CO", "NO2", "O3", "SO2", "PM2.5", "PM10"]
-fig_data, axs_data = plt.subplots(nrows=3, ncols=2, figsize=(60, 45))
-fig_err, axs_err = plt.subplots(nrows=6, ncols=2, figsize=(30, 50))
-fig_err_scatter, axs_err_scatter = plt.subplots(nrows=3, ncols=2, figsize=(40, 30))
+fig_data, axs_data = plt.subplots(nrows=3, ncols=2, figsize=(60, 25))
+fig_err, axs_err = plt.subplots(nrows=3, ncols=2, figsize=(60, 25))
+fig_data_pdf, axs_data_pdf = plt.subplots(nrows=3, ncols=2, figsize=(35, 45))
+fig_unc_pdf, axs_unc_pdf = plt.subplots(nrows=3, ncols=2, figsize=(35, 45))
+fig_data_cdf, axs_data_cdf = plt.subplots(nrows=3, ncols=2, figsize=(35, 45))
+fig_unc_cdf, axs_unc_cdf = plt.subplots(nrows=3, ncols=2, figsize=(35, 45))
+
 for idx, variable in enumerate(variables):
     (
         axs_data[idx % 3, idx % 2],
-        axs_err[idx, 0],
-        axs_err[idx, 1],
-        axs_err_scatter[idx % 3, idx % 2],
+        axs_err[idx % 3, idx % 2],
+        axs_data_pdf[idx % 3, idx % 2],
+        axs_unc_pdf[idx % 3, idx % 2],
+        axs_data_cdf[idx % 3, idx % 2],
+        axs_unc_cdf[idx % 3, idx % 2],
     ) = demo_assimilation_and_plot(
         all_data_df,
         variable,
         axs_data[idx % 3, idx % 2],
-        axs_err[idx, 0],
-        axs_err[idx, 1],
-        axs_err_scatter[idx % 3, idx % 2],
+        axs_err[idx % 3, idx % 2],
+        axs_data_pdf[idx % 3, idx % 2],
+        axs_unc_pdf[idx % 3, idx % 2],
+        axs_data_cdf[idx % 3, idx % 2],
+        axs_unc_cdf[idx % 3, idx % 2],
     )
 
 fig_data.savefig("plots/data.jpg")
 fig_err.savefig("plots/uncertainties.jpg")
-fig_err_scatter.savefig("plots/errors.jpg")
+fig_data_pdf.savefig("plots/data-pdf.jpg")
+fig_unc_pdf.savefig("plots/uncertainties-pdf.jpg")
+fig_data_cdf.savefig("plots/data-cdf.jpg")
+fig_unc_cdf.savefig("plots/uncertainties-cdf.jpg")

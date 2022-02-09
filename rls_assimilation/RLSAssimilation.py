@@ -1,6 +1,6 @@
 import numpy as np
 
-from DataSource import DataSource
+from rls_assimilation.DataSource import DataSource
 
 
 class RLSAssimilation:
@@ -52,6 +52,10 @@ class RLSAssimilation:
             k = (err_source2 ** 2 - cov) / (
                 err_source1 ** 2 + err_source2 ** 2 - 2 * cov
             )
+
+            # force min (0) and max (1) values in case of exceedance
+            k = max(min(k, 1), 0)
+
         except ZeroDivisionError:
             k = 1
 

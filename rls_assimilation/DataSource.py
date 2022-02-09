@@ -1,7 +1,7 @@
 from typing import List
 import numpy as np
 
-from RLS import RLS
+from rls_assimilation.RLS import RLS
 
 
 class DataSource:
@@ -67,8 +67,11 @@ class DataSource:
             self.r_errors.append(err)
         else:
             self.x_calibrated_all.append(self.r_model.predict(x_corr))
-            ar_r_err = float(np.abs(self.r_model.w[1]) * err) + self.r_model.error
-            self.r_errors.append(ar_r_err)
+            sign_factor = -1 if err < 0 else 1
+            r_err = float(np.abs(self.r_model.w[1]) * err) + sign_factor * np.abs(
+                self.r_model.error
+            )
+            self.r_errors.append(r_err)
 
             self.r_model.update(x_corr, x_ref)
 
@@ -111,12 +114,14 @@ class DataSource:
         # if do calibration
         if self.r_model:
             self.calibrate(x_corr, err, x_ref)
-            self.r_avg_err = ((t - 1) / t) * self.r_avg_err + (
-                1 / t
-            ) * self.r_model.error
+
+            err = self.get_latest_error()
+            # err = self.r_model.error
+
+            self.r_avg_err = ((t - 1) / t) * self.r_avg_err + (1 / t) * err
             if t > 1:
                 self.r_err_var = ((t - 1) / t) * self.r_err_var + (1 / (t - 1)) * (
-                    self.r_model.error - self.r_avg_err
+                    err - self.r_avg_err
                 ) ** 2
             else:
                 self.r_err_var = 0
