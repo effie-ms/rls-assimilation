@@ -1,7 +1,41 @@
-from typing import List
+from typing import List, Optional
 import numpy as np
 
 from rls_assimilation.RLS import RLS
+
+
+class RLSDailyAverage:
+    """
+    Implements RLS-based daily average upscaling of hourly estimates
+    """
+
+    def __init__(self):
+        self.current_average: float = 0
+        self.current_average_err: float = 0
+        self.latest_daily_average: float = 0
+        self.latest_daily_average_err: float = 0
+        self.counter: int = 0
+        self.r_model: Optional[RLS] = None
+
+    def daily_reset(self):
+        self.counter = 0
+        self.current_average = 0
+        self.current_average_err = 0
+
+    def update(self, x_new_hourly: float, x_new_hourly_err: float):
+        if self.counter == 24:
+            if self.r_model is None:
+                self.r_model = RLS()
+
+            self.latest_daily_average = self.current_average
+            self.latest_daily_average_err = self.current_average_err
+            self.daily_reset()
+
+        self.counter += 1
+        prev_sum = self.current_average * (self.counter - 1)
+        self.current_average = (prev_sum + x_new_hourly) / self.counter
+        prev_sum_err = self.current_average_err * (self.counter - 1)
+        self.current_average_err = (prev_sum_err + x_new_hourly_err) / self.counter
 
 
 class DataSource:
@@ -9,10 +43,28 @@ class DataSource:
     Implements AR(1) and R(1) algorithms
     """
 
-    def __init__(self, do_calibration=False):
+    def __init__(self, t_in: str, t_out: str, s_in: str, s_out: str):
         """
-        :param do_calibration: True, if R(1) algorithm should be used to estimate the uncertainty, otherwise False
+        :param t_in: input temporal scale (str, "hourly" or "daily")
+        :param t_out: output temporal scale (str, "hourly" or "daily")
+        :param s_in: input spatial scale (str)
+        :param s_out: output spatial scale (str)
         """
+
+        # resolutions
+        self.t_in: str = t_in
+        self.t_out: str = t_out
+        self.s_in: str = s_in
+        self.s_out: str = s_out
+
+        # models
+        self.ar_model: Optional[RLS] = None  # AR(1) model
+        self.temporal_model: Optional[RLSDailyAverage] = (
+            RLSDailyAverage() if t_in == "hourly" else None
+        )
+        self.spatial_r_model: Optional[RLS] = (
+            RLS() if s_in != s_out else None
+        )  # R(1) model
 
         # stored for plotting
         self.x_all = []  # raw values
@@ -21,35 +73,91 @@ class DataSource:
         self.ar_errors = []  # AR(1) modelling errors
         self.r_errors = []  # R(1) modelling errors
 
-        self.ar_avg_err = 0
-        self.ar_err_var = 0
-        self.r_avg_err = 0
-        self.r_err_var = 0
-        self.ar_model = None  # AR(1) model
-        self.r_model = RLS() if do_calibration else None  # R(1) model
+    def has_daily_average(self) -> bool:
+        return self.temporal_model is not None
+
+    def is_spatially_calibrated(self) -> bool:
+        return self.spatial_r_model is not None
 
     def get_latest_data_point(self) -> float:
-        return self.x_calibrated_all[-1] if self.r_model else self.x_corr_all[-1]
+        return (
+            self.x_calibrated_all[-1] if self.spatial_r_model else self.x_corr_all[-1]
+        )
 
     def get_latest_error(self) -> float:
-        return self.r_errors[-1] if self.r_model else self.ar_errors[-1]
+        return self.r_errors[-1] if self.spatial_r_model else self.ar_errors[-1]
 
-    def get_latest_avg_error(self) -> float:
-        return self.r_avg_err if self.r_model else self.ar_avg_err
-
-    def get_latest_error_variance(self) -> float:
-        return self.r_err_var if self.r_model else self.ar_err_var
-
-    def get_all_errors(self) -> List[float]:
-        return self.r_errors if self.r_model else self.ar_errors
+    def get_all_errors(self, force_ar_errors=False) -> List[float]:
+        return (
+            self.r_errors
+            if self.spatial_r_model and not force_ar_errors
+            else self.ar_errors
+        )
 
     def get_raw_data(self) -> List[float]:
         return self.x_all
 
     def get_corrected_data(self) -> List[float]:
-        return self.x_calibrated_all if self.r_model else self.x_corr_all
+        return (
+            self.x_calibrated_all if self.is_spatially_calibrated() else self.x_corr_all
+        )
 
-    def impute(self, x_past: float):
+    def upscale(self) -> (float, float):
+        """
+        Upscale the data of this source (get daily from hourly)
+
+        Returns (upscaled data value (float), upscaled uncertainty (float))
+        """
+
+        if not self.has_daily_average():
+            raise ValueError("Upscaling cannot be performed for daily data sources")
+
+        return (
+            self.temporal_model.latest_daily_average,
+            self.temporal_model.latest_daily_average_err,
+        )
+
+    def downscale_other_source(
+        self, x_hourly: float, other_x_daily: float, other_err_daily: float
+    ) -> (float, float):
+        """
+        Downscale the data of the second source (get an hourly estimate from a daily one)
+        using the relationship between hourly and daily of this source
+
+        :param: x_hourly - hourly data value of this source (float)
+        :param: other_x_daily - daily data value of the other source (float)
+        :param: other_err_daily - daily uncertainty of the other source (float)
+        Returns (other_x_hourly - downscaled data value (float), other_err_hourly - downscaled uncertainty (float))
+        """
+        if self.temporal_model.r_model:
+            self.temporal_model.r_model.update(
+                self.temporal_model.latest_daily_average, x_hourly
+            )
+
+        other_x_hourly = (
+            self.temporal_model.r_model.predict(other_x_daily)
+            if self.temporal_model.r_model
+            else other_x_daily
+        )
+
+        sign_factor = -1 if other_err_daily < 0 else 1
+        if self.temporal_model.r_model:
+            other_err_hourly = float(
+                np.abs(self.temporal_model.r_model.w[1]) * other_err_daily
+            ) + sign_factor * np.abs(self.temporal_model.r_model.error)
+        else:
+            other_err_hourly = other_err_daily
+
+        return other_x_hourly, other_err_hourly
+
+    def impute(self, x_past: Optional[float]) -> float:
+        """
+        Imputes a missing data value with AR(1) prediction
+
+        :param: x_past - the past value from the data source used as input for AR(1) model (float or None)
+        Returns: imputed data value (float)
+        """
+
         if not self.ar_model:
             if np.isnan(x_past):
                 return 0
@@ -58,29 +166,12 @@ class DataSource:
 
         return self.ar_model.predict(x_past)
 
-    def calibrate(self, x_corr: float, err: float, x_ref: float):
+    def estimate(self, x_new: Optional[float]) -> (float, float):
         """
-        Run R(1) calibration
-        """
-        if len(self.x_calibrated_all) < 1:
-            self.x_calibrated_all.append(x_corr)
-            self.r_errors.append(err)
-        else:
-            self.x_calibrated_all.append(self.r_model.predict(x_corr))
-            sign_factor = -1 if err < 0 else 1
-            r_err = float(np.abs(self.r_model.w[1]) * err) + sign_factor * np.abs(
-                self.r_model.error
-            )
-            self.r_errors.append(r_err)
+        Runs AR(1) uncertainty estimation
 
-            self.r_model.update(x_corr, x_ref)
-
-    def estimate(self, x_new: float, x_ref: float = np.nan):
-        """
-        Runs AR(1) and if do_calibration=True, R(1) uncertainty estimation
-
-        :param: x_new - the latest value from the data source
-        :param: x_ref - the reference value for calibration (if needed)
+        :param: x_new - the latest value from the data source (float or None)
+        Returns: (x_corr - imputed or raw data value (float), err - AR(1) uncertainty of x_corr (float))
         """
 
         self.x_all.append(x_new)  # save a raw observation
@@ -98,30 +189,39 @@ class DataSource:
 
                 self.ar_model.update(x_past, x_corr)
 
-        self.x_corr_all.append(x_corr)  # save a corrected (raw or imputed) data value
-
         # obtain error of the AR(1) model
         err = self.ar_model.error if self.ar_model else 0
+
+        self.x_corr_all.append(x_corr)  # save a corrected (raw or imputed) data value
         self.ar_errors.append(err)  # save the latest error
-        self.ar_avg_err = ((t - 1) / t) * self.ar_avg_err + (1 / t) * err
-        if t > 1:
-            self.ar_err_var = ((t - 1) / t) * self.ar_err_var + (1 / (t - 1)) * (
-                err - self.ar_avg_err
-            ) ** 2
-        else:
-            self.ar_err_var = 0
 
-        # if do calibration
-        if self.r_model:
-            self.calibrate(x_corr, err, x_ref)
+        return x_corr, err
 
-            err = self.get_latest_error()
-            # err = self.r_model.error
+    def calibrate(self, x_corr: float, err: float, x_ref: float):
+        """
+        Run spatial R(1) calibration
 
-            self.r_avg_err = ((t - 1) / t) * self.r_avg_err + (1 / t) * err
-            if t > 1:
-                self.r_err_var = ((t - 1) / t) * self.r_err_var + (1 / (t - 1)) * (
-                    err - self.r_avg_err
-                ) ** 2
-            else:
-                self.r_err_var = 0
+        :param: x_corr - a value being calibrated (float)
+        :param: err - uncertainty of the value being calibrated (float)
+        :param: x_ref - reference value for calibration (float)
+
+        Returns (x_calibrated - calibrated data value (float), r_err - uncertainty of x_calibrated (float))
+        """
+        if len(self.x_calibrated_all) < 1:
+            self.x_calibrated_all.append(x_corr)
+            self.r_errors.append(err)
+            return x_corr, err
+
+        # Step 1: Predict
+        x_calibrated = self.spatial_r_model.predict(x_corr)
+        self.x_calibrated_all.append(x_calibrated)
+        sign_factor = -1 if err < 0 else 1
+        r_err = float(np.abs(self.spatial_r_model.w[1]) * err) + sign_factor * np.abs(
+            self.spatial_r_model.error
+        )
+        self.r_errors.append(r_err)
+
+        # Step 2: Update
+        self.spatial_r_model.update(x_corr, x_ref)
+
+        return x_calibrated, r_err
