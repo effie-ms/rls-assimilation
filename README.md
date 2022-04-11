@@ -1,8 +1,8 @@
 # RLS-based data assimilation with unknown uncertainty
 
 Implementation of the Recursive Least Squares (RLS)-based uncertainty quantification and least-squares data assimilation
-algorithm described in paper *Lightweight Assimilation of Open Urban Ambient Air Quality Monitoring Data and Simulations 
-with Unknown Uncertainty*.
+algorithm described in paper [Lightweight Assimilation of Open Urban Ambient Air Quality Monitoring Data and Numerical Simulations 
+with Unknown Uncertainty](https://www.researchgate.net/publication/359872882_Lightweight_Assimilation_of_Open_Urban_Ambient_Air_Quality_Monitoring_Data_and_Numerical_Simulations_with_Unknown_Uncertainty).
 
 Python: 3.*
 
