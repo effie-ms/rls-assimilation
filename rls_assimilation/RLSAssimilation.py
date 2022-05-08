@@ -136,9 +136,9 @@ class RLSAssimilation:
 
         # Step 3: Assimilation
         try:
-            k = (err_source2**2) / (err_source1**2 + err_source2**2)
+            k = (err_source2 ** 2) / (err_source1 ** 2 + err_source2 ** 2)
 
-        except ZeroDivisionError:
+        except (ZeroDivisionError, FloatingPointError):
             k = 1
 
         assimilated_obs = k * source1_obs + (1 - k) * source2_obs

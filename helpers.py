@@ -1,4 +1,4 @@
-from math import sin, cos, sqrt, atan2, radians
+from datetime import timedelta
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,6 +13,14 @@ def get_rmse(arr1, arr2):
 
 def get_uncertainty_stats(err):
     return f"{np.mean(err).round(2)} ± {np.std(err).round(2)} [{np.min(err).round(2)}; {np.max(err).round(2)}]"
+
+
+def print_stats_from_array(arr, title):
+    arr_mean = round(np.mean(arr), 3)
+    arr_sd = round(np.std(arr), 3)
+    arr_min = round(np.min(arr), 3)
+    arr_max = round(np.max(arr), 3)
+    print(f"{title}: {arr_mean} ± {arr_sd} [{arr_min};{arr_max}]")
 
 
 def print_metrics(
@@ -97,125 +105,127 @@ def plot_data(
     return ax_data
 
 
-def plot_data2(
-    s1_hourly,
-    s1_daily,
-    s2_hourly,
-    s2_daily,
-    assimilated,
+def read_data(data_path):
+    all_data_df = pd.read_csv(data_path, index_col=0)
+    all_data_df.index = pd.to_datetime(
+        list(all_data_df.index), format="%Y-%m-%d %H:%M:%S"
+    )
+    all_data_df = all_data_df.sort_index()
+    return all_data_df
+
+
+def prepare_daily_data(variable, data_path):
+    all_data_df = read_data(data_path)
+    daily_means1 = all_data_df[f"{variable}"].resample("D").mean()
+    daily_means1.index = daily_means1.index + timedelta(days=1)
+    observations_source1_daily_and_hourly = pd.concat(
+        [all_data_df[f"{variable}"][23:], daily_means1], axis=1
+    ).ffill()
+    observations_source1_daily_and_hourly.columns = [
+        f"{variable}_obs_hourly",
+        f"{variable}_obs_daily",
+    ]
+
+    daily_means2 = all_data_df[f"{variable}_model"].resample("D").mean()
+    daily_means2.index = daily_means2.index + timedelta(days=1)
+    observations_source2_daily_and_hourly = pd.concat(
+        [all_data_df[f"{variable}_model"][23:], daily_means2], axis=1
+    ).ffill()
+    observations_source2_daily_and_hourly.columns = [
+        f"{variable}_model_hourly",
+        f"{variable}_model_daily",
+    ]
+
+    concatenated_sources_daily_and_hourly = pd.concat(
+        [observations_source1_daily_and_hourly, observations_source2_daily_and_hourly],
+        axis=1,
+    )
+
+    return concatenated_sources_daily_and_hourly
+
+
+def plot_data_seq(
+    s1,
+    s2,
+    da_assimilated,
+    seq_assimilated,
     variable,
     ax_data,
+    da_scenario,
+    seq_scenario,
 ):
     ax_data.set_title(f"{variable}")
     ax_data.plot(
-        s1_hourly.index,
-        s1_hourly.values,
+        s1.index,
+        s1.values,
         color="red",
         marker="X",
         linewidth=0,
-        markersize=10,
+        markersize=6,
     )
     ax_data.plot(
-        s1_daily.index,
-        s1_daily.values,
+        s2.index,
+        s2.values,
         color="blue",
         linestyle="-",
-        linewidth=3,
+        linewidth=4,
     )
     ax_data.plot(
-        s2_hourly.index,
-        s2_hourly.values,
-        color="gray",
-        linestyle="-",
-        linewidth=3,
-    )
-    ax_data.plot(
-        s2_daily.index,
-        s2_daily.values,
+        da_assimilated.index,
+        da_assimilated.values,
         color="black",
         linestyle="-",
-        linewidth=3,
+        linewidth=2,
     )
-    assimilated.plot(
-        s2_daily.index,
-        s2_daily.values,
-        color="green",
+    ax_data.plot(
+        seq_assimilated.index,
+        seq_assimilated.values,
+        color="gray",
         linestyle="-",
-        linewidth=3,
+        linewidth=2,
     )
-
     ax_data.set_xlabel("Date")
     ax_data.set_ylabel("ug/m³")
     ax_data.grid()
 
+    every_nth = 2
+    for n, label in enumerate(ax_data.xaxis.get_ticklabels()):
+        if n % every_nth != 1:
+            label.set_visible(False)
+
     if variable == "CO":
         ax_data.legend(
             [
-                "Station hourly",
-                "Station daily",
-                "Model hourly",
-                "Model daily",
-                "DA",
+                "Station",
+                "Model",
+                da_scenario,
+                seq_scenario,
             ]
         )
 
     return ax_data
 
 
-def get_distance_between_points(lat1, lon1, lat2, lon2):
-    r = 6373.0  # Earth radius in km
+def print_metrics_seq(
+    s1,
+    s2,
+    da_assimilated,
+    da_err_assimilated,
+    seq_assimilated,
+    seq_err_assimilated,
+    da_scenario,
+    seq_scenario,
+):
+    s1[np.isnan(s1)] = 0
+    s2[np.isnan(s2)] = 0
 
-    lat1 = radians(lat1)
-    lon1 = radians(lon1)
-    lat2 = radians(lat2)
-    lon2 = radians(lon2)
+    # Root Mean Squared Errors
+    print(f"RMSE (Station and Model): {get_rmse(s1, s2)}")
+    print(f"RMSE (Station and {da_scenario}): {get_rmse(s1, da_assimilated)}")
+    print(f"RMSE (Station and {seq_scenario}): {get_rmse(s1, seq_assimilated)}")
+    print(f"RMSE (Model and {da_scenario}): {get_rmse(s2, da_assimilated)}")
+    print(f"RMSE (Model and {seq_scenario}): {get_rmse(s2, seq_assimilated)}")
 
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-
-    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-
-    return r * c
-
-
-def get_distances_from_stations(lat, lon, stations):
-    dist_dict = dict()
-    for coord in stations:
-        st_lat = float(coord.split(";")[0])
-        st_lon = float(coord.split(";")[1])
-        dist_dict[coord] = get_distance_between_points(lat, lon, st_lat, st_lon)
-
-    return dist_dict
-
-
-def get_stations_within_distance(lat, lon, unc_ts, dist_km):
-    dist_dict = get_distances_from_stations(lat, lon, unc_ts.index.values)
-    unc_interp = 0
-
-    for key in dist_dict.keys():
-        d = dist_dict[key]
-        if dist_dict[key] <= dist_km:
-            w = dist_dict[key] / dist_km
-            mau = unc_ts[key]
-            unc_interp += w * mau
-
-    return unc_interp if unc_interp != 0 else None
-
-
-def get_uncertainty_matrix(min_lat, max_lat, min_lon, max_lon, step, dist_km, unc_ts):
-    unc_map_df = pd.DataFrame(dtype=float)
-    lats = np.arange(min_lat, max_lat, step)
-    lons = np.arange(min_lon, max_lon, step)
-    for i in range(len(lats)):
-        for j in range(len(lons)):
-            lat = lats[i]
-            lon = lons[j]
-
-            unc = get_stations_within_distance(lat, lon, unc_ts, dist_km)
-
-            unc_map_df = unc_map_df.append(
-                {"lat": lat, "lon": lon, "MAU": unc}, ignore_index=True
-            )
-
-    return unc_map_df
+    # Mean Absolute Uncertainties
+    print(f"MAU ({da_scenario}): {np.mean(np.abs(da_err_assimilated)).round(2)}")
+    print(f"MAU ({seq_scenario}): {np.mean(np.abs(seq_err_assimilated)).round(2)}")

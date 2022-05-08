@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from rls_assimilation import RLSAssimilation
+from rls_assimilation.RLSAssimilation import RLSAssimilation
 from helpers import (
     plot_data,
     print_metrics,

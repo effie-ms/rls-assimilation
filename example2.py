@@ -1,143 +1,323 @@
 import os
-from datetime import timedelta
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from rls_assimilation.RLSAssimilation import RLSAssimilation
-from helpers import get_rmse, get_uncertainty_matrix
+from rls_assimilation.SequentialRLSAssimilation import (
+    SequentialRLSAssimilationOneSource,
+    SequentialRLSAssimilationTwoSources,
+)
+from helpers import (
+    plot_data_seq,
+    print_metrics_seq,
+    get_rmse,
+    print_stats_from_array,
+    read_data,
+    prepare_daily_data,
+)
 
 
-def prepare_data(d_path):
-    all_data_df = pd.read_csv(d_path, index_col=0)
-    all_data_df.index = pd.to_datetime(
-        list(all_data_df.index), format="%Y-%m-%d %H:%M:%S"
+np.seterr(all="raise")
+
+
+def run_assimilation(df, variable, t_in1, t_in2, s_in1, s_in2, t_out, s_out):
+    is_multi_t = t_in1 != t_out or t_in2 != t_out  # multi-temporal data assimilation
+    is_one_seq_source = not is_multi_t
+
+    assimilator = RLSAssimilation(
+        t_in1=t_in1,
+        t_in2=t_in2,
+        s_in1=s_in1,
+        s_in2=s_in2,
+        t_out=t_out,
+        s_out=s_out,
     )
-    all_data_df = all_data_df.sort_index()
-    daily_means1 = all_data_df[f"{variable}"].resample("D").mean()
-    daily_means1.index = daily_means1.index + timedelta(days=1)
-    observations_source1_daily_and_hourly = pd.concat(
-        [all_data_df[f"{variable}"][23:], daily_means1], axis=1
-    ).ffill()
-    observations_source1_daily_and_hourly.columns = [
-        f"{variable}_obs_hourly",
-        f"{variable}_obs_daily",
-    ]
+    if is_one_seq_source:
+        seq_assimilator = SequentialRLSAssimilationOneSource()
+    else:
+        seq_assimilator = SequentialRLSAssimilationTwoSources(
+            t_in1=t_in1,
+            t_in2=t_in2,
+            s_in1=s_in1,
+            s_in2=s_in2,
+            t_out=t_out,
+            s_out=s_out,
+        )
 
-    daily_means2 = all_data_df[f"{variable}_model"].resample("D").mean()
-    daily_means2.index = daily_means2.index + timedelta(days=1)
-    observations_source2_daily_and_hourly = pd.concat(
-        [all_data_df[f"{variable}_model"][23:], daily_means2], axis=1
-    ).ffill()
-    observations_source2_daily_and_hourly.columns = [
-        f"{variable}_model_hourly",
-        f"{variable}_model_daily",
-    ]
-
-    concatenated_sources_daily_and_hourly = pd.concat(
-        [observations_source1_daily_and_hourly, observations_source2_daily_and_hourly],
-        axis=1,
-    )
-
-    return concatenated_sources_daily_and_hourly
-
-
-def run_test(data_path, variable, t1_in, t2_in, t_out, s1_in, s2_in, s_out):
-    concatenated_sources_daily_and_hourly = prepare_data(data_path)
-    n_observations = len(concatenated_sources_daily_and_hourly)
+    if is_one_seq_source:
+        source1_col = f"{variable}"
+        source2_col = f"{variable}_model"
+        seq_source_col = source1_col if s_out == s_in1 else source2_col
+    else:
+        source1_col = f"{variable}_{s_in1}_{t_in1}"
+        source2_col = f"{variable}_{s_in2}_{t_in2}"
+        seq_source_col = None
 
     assimilated = []
     err_assimilated = []
+    seq_assimilated = []
+    seq_err_assimilated = []
 
-    # assimilation with calibration, since s1 != s2
-    assimilator = RLSAssimilation(
-        t_in1=t1_in, t_in2=t2_in, s_in1=s1_in, s_in2=s2_in, t_out=t_out, s_out=s_out
-    )
+    for k in range(len(df)):
+        # Step 1: Obtain raw observations from 2 sources
+        latest_observation_source1 = df[source1_col].values[k]
+        latest_observation_source2 = df[source2_col].values[k]
 
-    # assimilate
-    for k in range(n_observations):
-        latest_observation_source1 = concatenated_sources_daily_and_hourly[
-            f"{variable}_{s1_in}_{t1_in}"
-        ][k]
-        latest_observation_source2 = concatenated_sources_daily_and_hourly[
-            f"{variable}_{s2_in}_{t2_in}"
-        ][k]
-        (
-            assimilated_obs_calibrated,
-            err_assimilated_obs_calibrated,
-        ) = assimilator.assimilate(
+        # Step 2: Assimilate
+        analysis, err_analysis = assimilator.assimilate(
             latest_observation_source1,
             latest_observation_source2,
         )
-        assimilated.append(assimilated_obs_calibrated)
-        err_assimilated.append(err_assimilated_obs_calibrated)
+        assimilated.append(analysis)
+        err_assimilated.append(err_analysis)
 
-    concatenated_sources_daily_and_hourly["Assimilated"] = assimilated
+        if is_one_seq_source:
+            latest_observation_source = df[seq_source_col][k]
+            seq_analysis, seq_err_analysis = seq_assimilator.assimilate(
+                latest_observation_source
+            )
+        else:
+            seq_analysis, seq_err_analysis = seq_assimilator.assimilate(
+                latest_observation_source1,
+                latest_observation_source2,
+            )
 
-    # get performance metrics
-    mean_unc = np.mean(err_assimilated)
-    concatenated_sources_daily_and_hourly = (
-        concatenated_sources_daily_and_hourly.dropna()
-    )
-    a_rmse = get_rmse(
-        concatenated_sources_daily_and_hourly["Assimilated"].values,
-        concatenated_sources_daily_and_hourly[f"{variable}_{s_out}_hourly"].values,
-    )
-    dh_rmse = get_rmse(
-        concatenated_sources_daily_and_hourly[f"{variable}_{s_out}_daily"].values,
-        concatenated_sources_daily_and_hourly[f"{variable}_{s_out}_hourly"].values,
-    )
+        seq_assimilated.append(seq_analysis)
+        seq_err_assimilated.append(seq_err_analysis)
 
-    return a_rmse / dh_rmse if dh_rmse != 0 else 1, mean_unc
+    df["Assimilated"] = assimilated
+    df["Seq_Assimilated"] = seq_assimilated
+    df = df.dropna()
 
+    # Step 3: Get metrics
+    # Uncertainties
+    mean_unc_da = np.mean(err_assimilated)
+    mean_unc_seq = np.mean(seq_err_assimilated)
 
-def run_tests_for_variable(variable):
-    data_path_dir = f"data/Europe_AQ/combined_{variable}"
-    unc_ts = pd.Series(
-        index=[f.replace(".csv", "") for f in os.listdir(data_path_dir)], dtype="float"
-    )
+    # Get a ratio of mean uncertainties for DA and sequential DA
+    try:
+        err_seq_da_ratio = mean_unc_seq / mean_unc_da
+    except (ZeroDivisionError, FloatingPointError):
+        err_seq_da_ratio = 1
 
-    # input temporal scales
-    t1 = "hourly"
-    t2 = "daily"
-    # output temporal scale
-    t = t1
-
-    # input spatial scales
-    s1 = "obs"
-    s2 = "model"
-    # output spatial scale
-    s = s2
-
-    ratios = []
-    mean_maus = []
-
-    for filename in os.listdir(data_path_dir):
-        ratio, mean_mau = run_test(
-            f"{data_path_dir}/{filename}", variable, t1, t2, t, s1, s2, s
+    # RMSE between values
+    if seq_source_col:
+        rmse_seq = get_rmse(
+            df["Seq_Assimilated"].values,
+            df[seq_source_col].values,
         )
-        ratios.append(ratio)
-        mean_maus.append(mean_mau)
+        rmse_da = get_rmse(
+            df[f"Assimilated"].values,
+            df[seq_source_col].values,
+        )
+        try:
+            seq_da_ratio = rmse_seq / rmse_da
+        except (ZeroDivisionError, FloatingPointError):
+            seq_da_ratio = 1
 
-        lat = filename.replace(".csv", "").split(";")[0]
-        lon = filename.replace(".csv", "").split(";")[1]
-        unc_ts[f"{lat};{lon}"] = mean_mau
+        return (
+            seq_da_ratio,
+            None,
+            err_seq_da_ratio,
+            df,
+            err_assimilated,
+            seq_err_assimilated,
+        )
 
-    mean_ratio = round(np.mean(ratios), 3)
-    sd_ratio = round(np.std(ratios), 3)
-    min_ratio = round(np.min(ratios), 3)
-    max_ratio = round(np.max(ratios), 3)
-    print(f"Performance ratio: {mean_ratio}+-{sd_ratio} [{min_ratio};{max_ratio}]")
+    # Compare errors of assimilated from actual hourly reference
+    rmse_da_h = get_rmse(
+        df["Assimilated"].values,
+        df[f"{variable}_{s_out}_hourly"].values,
+    )
+    rmse_seq_h = get_rmse(
+        df["Seq_Assimilated"].values,
+        df[f"{variable}_{s_out}_hourly"].values,
+    )
+    rmse_dh = get_rmse(
+        df[f"{variable}_{s_out}_daily"].values,
+        df[f"{variable}_{s_out}_hourly"].values,
+    )
 
-    # Uncomment to generate data for an uncertainty map
-    # min_lat = 28.0
-    # max_lat = 62.0
-    # min_lon = -18.0
-    # max_lon = 30.0
-    # unc_map_df = get_uncertainty_matrix(min_lat, max_lat, min_lon, max_lon, 0.2, 50, unc_ts)
-    # unc_map_df.to_csv(f'plots/maps/{variable}_map.csv')
+    try:
+        da_dh_ratio = rmse_da_h / rmse_dh
+    except (ZeroDivisionError, FloatingPointError):
+        da_dh_ratio = 1
+
+    try:
+        seq_dh_ratio = rmse_seq_h / rmse_dh
+    except (ZeroDivisionError, FloatingPointError):
+        seq_dh_ratio = 1
+
+    return (
+        da_dh_ratio,
+        seq_dh_ratio,
+        err_seq_da_ratio,
+        df,
+        err_assimilated,
+        seq_err_assimilated,
+    )
 
 
-variables = ["CO", "NO2", "O3", "SO2", "PM25", "PM10"]
-for variable in variables:
-    print(variable)
-    run_tests_for_variable(variable)
+def test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out):
+    is_multi_t = t_in1 != t_out or t_in2 != t_out
+
+    data_path = "data/liivalaia_aq_meas_with_forecast.csv"
+
+    variables = ["CO", "NO2", "O3", "SO2", "PM2.5", "PM10"]
+
+    fig_data, axs_data = plt.subplots(nrows=3, ncols=2, figsize=(25, 25))
+
+    for idx, variable in enumerate(variables):
+        print(variable)
+        if not is_multi_t:
+            df = read_data(data_path)
+            (
+                seq_da_ratio,
+                _,
+                err_seq_da_ratio,
+                df,
+                err_assimilated,
+                seq_err_assimilated,
+            ) = run_assimilation(df, variable, t_in1, t_in2, s_in1, s_in2, t_out, s_out)
+        else:
+            df = prepare_daily_data(variable, data_path)
+            (
+                da_dh_ratio,
+                seq_dh_ratio,
+                err_seq_da_ratio,
+                df,
+                err_assimilated,
+                seq_err_assimilated,
+            ) = run_assimilation(df, variable, t_in1, t_in2, s_in1, s_in2, t_out, s_out)
+
+        da_scenario = f"DA{'3' if not is_multi_t else '4'} ({'Model' if s_out == s_in1 else 'Station'} -> {'Station' if s_out == s_in1 else 'Model'})"
+        seq_scenario = (
+            f"Sequential DA ({'Station' if s_in1 == s_out else 'Model'})"
+            if not is_multi_t
+            else f"Sequential DA ({'Model' if s_out == s_in1 else 'Station'} -> {'Station' if s_out == s_in1 else 'Model'})"
+        )
+
+        if not is_multi_t:
+            source1_col = f"{variable}"
+            source2_col = f"{variable}_model"
+        else:
+            source1_col = f"{variable}_{s_in1}_{t_in1}"
+            source2_col = f"{variable}_{s_in2}_{t_in2}"
+
+        axs_data[idx % 3, idx % 2] = plot_data_seq(
+            pd.Series(df[source1_col], index=df.index),
+            pd.Series(df[source2_col], index=df.index),
+            pd.Series(df["Assimilated"], index=df.index),
+            pd.Series(df["Seq_Assimilated"], index=df.index),
+            variable,
+            axs_data[idx % 3, idx % 2],
+            da_scenario,
+            seq_scenario,
+        )
+
+        print_metrics_seq(
+            df[source1_col].values,
+            df[source2_col].values,
+            df["Assimilated"].values,
+            err_assimilated,
+            df["Seq_Assimilated"].values,
+            seq_err_assimilated,
+            da_scenario,
+            seq_scenario,
+        )
+
+    scenario_id = f"da{'3' if not is_multi_t else '4'}-{'1' if s_out == 'obs' else '2'}"
+    fig_data.savefig(f"plots/Liivalaia/Sequential/data-{scenario_id}.jpg")
+
+
+def test_variable_Europe_AQ(
+    variable,
+    t_in1,
+    t_in2,
+    s_in1,
+    s_in2,
+    t_out,
+    s_out,
+):
+    is_multi_t = t_in1 != t_out or t_in2 != t_out
+    data_path_dir = f"data/Europe_AQ/combined_{variable}"
+    unc_ratios = []
+
+    if not is_multi_t:
+        seq_da_ratios = []
+        for filename in os.listdir(data_path_dir):
+            df = read_data(f"{data_path_dir}/{filename}")
+            (
+                seq_da_ratio,
+                _,
+                err_seq_da_ratio,
+                _,
+                _,
+                _,
+            ) = run_assimilation(df, variable, t_in1, t_in2, s_in1, s_in2, t_out, s_out)
+            seq_da_ratios.append(seq_da_ratio)
+            unc_ratios.append(err_seq_da_ratio)
+
+        print_stats_from_array(seq_da_ratios, "RMSE ratio (Sequential/Non-sequential)")
+    else:
+        da_dh_ratios = []
+        seq_dh_ratios = []
+        for filename in os.listdir(data_path_dir):
+            data_path = f"{data_path_dir}/{filename}"
+            df = prepare_daily_data(variable, data_path)
+            (
+                da_dh_ratio,
+                seq_dh_ratio,
+                err_seq_da_ratio,
+                _,
+                _,
+                _,
+            ) = run_assimilation(df, variable, t_in1, t_in2, s_in1, s_in2, t_out, s_out)
+            da_dh_ratios.append(da_dh_ratio)
+            seq_dh_ratios.append(seq_dh_ratio)
+            unc_ratios.append(err_seq_da_ratio)
+
+        print_stats_from_array(
+            da_dh_ratios,
+            "RMSE ratio from hourly reference (Non-sequential assimilated / Daily reference)",
+        )
+        print_stats_from_array(
+            seq_dh_ratios,
+            "RMSE ratio from hourly reference (Sequential assimilated / Daily reference)",
+        )
+
+    print_stats_from_array(unc_ratios, "MAU ratio (Sequential/Non-Sequential)")
+
+
+def generate_tests(is_multi_t, s_out):
+    s_in1 = "obs"
+    s_in2 = "model"
+
+    t_in1 = "daily" if is_multi_t and s_in1 == s_out else "hourly"
+    t_in2 = "daily" if is_multi_t and s_in2 == s_out else "hourly"
+    t_out = "hourly"
+
+    print(
+        f"Scales: {'hourly' if not is_multi_t else 'daily to hourly'}, {'model to station' if s_out == 'obs' else 'station to model'}"
+    )
+
+    # For Liivalaia
+    # print('Liivalaia')
+    # test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out)
+
+    # For Europe AQ dataset
+    print("European AQ")
+    variables = ["CO", "NO2", "O3", "SO2", "PM25", "PM10"]
+    for variable in variables:
+        print(variable)
+        test_variable_Europe_AQ(variable, t_in1, t_in2, s_in1, s_in2, t_out, s_out)
+
+
+# Test 1-source sequential VS 2-source non-sequential (the same temporal scales)
+generate_tests(False, "obs")
+# generate_tests(False, "model")
+
+# Test 2-source non-sequential VS 2-source sequential (different temporal scales)
+generate_tests(True, "obs")
+# generate_tests(True, "model")

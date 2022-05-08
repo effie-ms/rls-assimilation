@@ -38,7 +38,67 @@ class RLSDailyAverage:
         self.current_average_err = (prev_sum_err + x_new_hourly_err) / self.counter
 
 
-class DataSource:
+class DataSourceAR1:
+    """
+    Implements AR(1) model of a data source
+    """
+
+    def __init__(self):
+        self.ar_model: Optional[RLS] = None  # AR(1) model
+        # stored for plotting
+        self.x_all = []  # raw values
+        self.x_corr_all = []  # x_all with filled missing values (if there are any)
+        self.ar_errors = []  # AR(1) modelling errors
+
+    def impute(self, x_past: Optional[float]) -> float:
+        """
+        Imputes a missing data value with AR(1) prediction
+
+        :param: x_past - the past value from the data source used as input for AR(1) model (float or None)
+        Returns: imputed data value (float)
+        """
+
+        if not self.ar_model:
+            if np.isnan(x_past):
+                return 0
+            else:
+                return x_past
+
+        return self.ar_model.predict(x_past)
+
+    def estimate(self, x_new: Optional[float]) -> (float, float):
+        """
+        Runs AR(1) uncertainty estimation
+
+        :param: x_new - the latest value from the data source (float or None)
+        Returns: (x_corr - imputed or raw data value (float), err - AR(1) uncertainty of x_corr (float))
+        """
+
+        self.x_all.append(x_new)  # save a raw observation
+        t = len(self.x_all)  # the number of acquired data points
+
+        # Run AR(1) estimation
+        x_past = self.x_corr_all[-1] if t > 1 else np.nan
+        if np.isnan(x_new):
+            x_corr = self.impute(x_past)  # impute (predict) if missing
+        else:
+            x_corr = x_new
+            if not np.isnan(x_past):
+                if not self.ar_model:
+                    self.ar_model = RLS()  # initialise when data gets available
+
+                self.ar_model.update(x_past, x_corr)
+
+        # obtain error of the AR(1) model
+        err = self.ar_model.error if self.ar_model else 0
+
+        self.x_corr_all.append(x_corr)  # save a corrected (raw or imputed) data value
+        self.ar_errors.append(err)  # save the latest error
+
+        return x_corr, err
+
+
+class DataSource(DataSourceAR1):
     """
     Implements AR(1) and R(1) algorithms
     """
@@ -58,7 +118,7 @@ class DataSource:
         self.s_out: str = s_out
 
         # models
-        self.ar_model: Optional[RLS] = None  # AR(1) model
+        DataSourceAR1.__init__(self)
         self.temporal_model: Optional[RLSDailyAverage] = (
             RLSDailyAverage() if t_in == "hourly" else None
         )
@@ -67,10 +127,7 @@ class DataSource:
         )  # R(1) model
 
         # stored for plotting
-        self.x_all = []  # raw values
-        self.x_corr_all = []  # x_all with filled missing values (if there are any)
         self.x_calibrated_all = []  # R(1) model predictions
-        self.ar_errors = []  # AR(1) modelling errors
         self.r_errors = []  # R(1) modelling errors
 
     def has_daily_average(self) -> bool:
@@ -149,53 +206,6 @@ class DataSource:
             other_err_hourly = other_err_daily
 
         return other_x_hourly, other_err_hourly
-
-    def impute(self, x_past: Optional[float]) -> float:
-        """
-        Imputes a missing data value with AR(1) prediction
-
-        :param: x_past - the past value from the data source used as input for AR(1) model (float or None)
-        Returns: imputed data value (float)
-        """
-
-        if not self.ar_model:
-            if np.isnan(x_past):
-                return 0
-            else:
-                return x_past
-
-        return self.ar_model.predict(x_past)
-
-    def estimate(self, x_new: Optional[float]) -> (float, float):
-        """
-        Runs AR(1) uncertainty estimation
-
-        :param: x_new - the latest value from the data source (float or None)
-        Returns: (x_corr - imputed or raw data value (float), err - AR(1) uncertainty of x_corr (float))
-        """
-
-        self.x_all.append(x_new)  # save a raw observation
-        t = len(self.x_all)  # the number of acquired data points
-
-        # Run AR(1) estimation
-        x_past = self.x_corr_all[-1] if t > 1 else np.nan
-        if np.isnan(x_new):
-            x_corr = self.impute(x_past)  # impute (predict) if missing
-        else:
-            x_corr = x_new
-            if not np.isnan(x_past):
-                if not self.ar_model:
-                    self.ar_model = RLS()  # initialise when data gets available
-
-                self.ar_model.update(x_past, x_corr)
-
-        # obtain error of the AR(1) model
-        err = self.ar_model.error if self.ar_model else 0
-
-        self.x_corr_all.append(x_corr)  # save a corrected (raw or imputed) data value
-        self.ar_errors.append(err)  # save the latest error
-
-        return x_corr, err
 
     def calibrate(self, x_corr: float, err: float, x_ref: float):
         """
