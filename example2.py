@@ -319,5 +319,5 @@ generate_tests(False, "obs")
 # generate_tests(False, "model")
 
 # Test 2-source non-sequential VS 2-source sequential (different temporal scales)
-generate_tests(True, "obs")
-# generate_tests(True, "model")
+# generate_tests(True, "obs")
+generate_tests(True, "model")
