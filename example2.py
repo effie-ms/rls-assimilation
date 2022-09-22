@@ -195,7 +195,7 @@ def test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out):
         seq_scenario = (
             f"Sequential DA ({'Station' if s_in1 == s_out else 'Model'})"
             if not is_multi_t
-            else f"Sequential DA ({'Model' if s_out == s_in1 else 'Station'} -> {'Station' if s_out == s_in1 else 'Model'})"
+            else f"Sequential DA4 ({'Model' if s_out == s_in1 else 'Station'} -> {'Station' if s_out == s_in1 else 'Model'})"
         )
 
         if not is_multi_t:
@@ -214,6 +214,7 @@ def test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out):
             axs_data[idx % 3, idx % 2],
             da_scenario,
             seq_scenario,
+            "Liivalaia (Tallinn, Estonia)",
         )
 
         print_metrics_seq(
@@ -228,7 +229,7 @@ def test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out):
         )
 
     scenario_id = f"da{'3' if not is_multi_t else '4'}-{'1' if s_out == 'obs' else '2'}"
-    fig_data.savefig(f"plots/Liivalaia/Sequential/data-{scenario_id}.jpg")
+    fig_data.savefig(f"plots/Liivalaia/Sequential/data-{scenario_id}.png")
 
 
 def test_variable_Europe_AQ(

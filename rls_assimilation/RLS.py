@@ -34,5 +34,9 @@ class RLS:
         :return: predicted observation (scalar)
         """
 
+        all_zeros = not np.any(self.w)
+        if all_zeros:
+            return x
+
         X = np.reshape([1, x], (1, 2))  # reshape to a 1x2 matrix
         return float(X @ self.w)

@@ -85,7 +85,7 @@ def plot_data(
         linewidth=2,
     )
     ax_data.set_xlabel("Date")
-    ax_data.set_ylabel("ug/m³")
+    ax_data.set_ylabel("Concentration (ug/m³)")
     ax_data.grid()
 
     every_nth = 2
@@ -153,8 +153,9 @@ def plot_data_seq(
     ax_data,
     da_scenario,
     seq_scenario,
+    location_label,
 ):
-    ax_data.set_title(f"{variable}")
+    ax_data.set_title(f"{variable} - {location_label}")
     ax_data.plot(
         s1.index,
         s1.values,
@@ -185,7 +186,7 @@ def plot_data_seq(
         linewidth=2,
     )
     ax_data.set_xlabel("Date")
-    ax_data.set_ylabel("ug/m³")
+    ax_data.set_ylabel("Concentration (ug/m³)")
     ax_data.grid()
 
     every_nth = 2
