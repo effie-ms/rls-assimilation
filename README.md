@@ -38,8 +38,9 @@ After installing the requirements, run the script `example1.py`:
  
     python example1.py
 
-The script will generate plots in `plots/Liivalaia/` and print metrics for the Tallinn dataset 
-`data/liivalaia_aq_meas_with_forecast.csv`.
+The script will generate plots in `plots/Liivalaia/` and print metrics for the autumn Tallinn dataset 
+`data/liivalaia_aq_meas_with_forecast.csv`. Modify plots' location to `plots/Liivalaia2/` for the winter Tallinn dataset 
+`data/liivalaia_aq_meas_with_forecast2.csv`.
 
 ### Sequential Assimilation of Open European Urban Ambient Air Quality Data of Different Scales with Unknown Uncertainty
 

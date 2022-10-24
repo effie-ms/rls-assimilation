@@ -104,7 +104,7 @@ def demo_assimilation_and_plot(
 
 
 def test_scenario(s_in1, s_in2, s_out, scenario_id):
-    data_path = "data/liivalaia_aq_meas_with_forecast.csv"
+    data_path = "data/liivalaia_aq_meas_with_forecast.csv"  # for autumn, or liivalaia_aq_meas_with_forecast.csv - for winter
     all_data_df = pd.read_csv(data_path, index_col=0)
     all_data_df.index = pd.to_datetime(
         list(all_data_df.index), format="%Y-%m-%d %H:%M:%S"
@@ -124,7 +124,9 @@ def test_scenario(s_in1, s_in2, s_out, scenario_id):
             s_in2,
             s_out,
         )
-    fig_data.savefig(f"plots/Liivalaia/data-{scenario_id}.jpg")
+    fig_data.savefig(
+        f"plots/Liivalaia/data-{scenario_id}.jpg"
+    )  # the autumn data, directory Liivalaia2 is used for the winter data
 
 
 # NB: keep model as the second source (s_in2, not s_in1)
