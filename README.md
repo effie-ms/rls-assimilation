@@ -3,16 +3,12 @@
 Implementation of the Recursive Least Squares (RLS)-based uncertainty quantification and least-squares data assimilation
 algorithms.
  
-The algorithms described in the following papers:
- * *Version 1* [Lightweight Assimilation of Open Urban Ambient Air Quality Monitoring Data and Numerical Simulations 
-with Unknown Uncertainty](https://www.researchsquare.com/article/rs-1567264/v2), 
-branch [v1](https://github.com/effie-ms/rls-assimilation/tree/v1).
- * *Version 2* [Sequential Assimilation of Open European Urban Ambient Air Quality Data of Different Scales with Unknown Uncertainty](#TODO), 
-branch [v2](https://github.com/effie-ms/rls-assimilation/tree/v2).
- 
-*NB*: to obtain the exact results from the paper describing *Version 1*, use branch [v1](https://github.com/effie-ms/rls-assimilation/tree/v1).
-Otherwise, use the latest version [v2](https://github.com/effie-ms/rls-assimilation/tree/v2) (providing a slightly 
-better performance).
+The algorithms are described in the following papers:
+ * [Lightweight Assimilation of Open Urban Ambient Air Quality Monitoring Data and Numerical Simulations 
+with Unknown Uncertainty](https://www.researchsquare.com/article/rs-1567264/v2) (experiments from `example1.py`).
+ * [Sequential Assimilation of Open European Urban Ambient Air Quality Data of Different Scales with Unknown Uncertainty](#TODO) 
+ (experiments from `example2.py`).
+
 
 Python: 3.*
 
