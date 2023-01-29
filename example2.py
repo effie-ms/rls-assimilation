@@ -159,19 +159,32 @@ def run_assimilation(df, variable, t_in1, t_in2, s_in1, s_in2, t_out, s_out):
     )
 
 
-def test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out):
+def get_location_by_variable(variable):
+    if variable in ["CO", "SO2"]:
+        return "Madrid (Spain)"
+    if variable in ["NO2", "O3"]:
+        return "Peristeri (Athens, Greece)"
+    if variable in ["PM2.5", "PM10"]:
+        return "Paris (France)"
+
+    return ""
+
+
+def test_single_dataset(
+    data_path, output_path, get_location_name, t_in1, t_in2, s_in1, s_in2, t_out, s_out
+):
+    plotted_n_hours = 168
+
     is_multi_t = t_in1 != t_out or t_in2 != t_out
 
-    data_path = "data/liivalaia_aq_meas_with_forecast.csv"
-
-    variables = ["CO", "NO2", "O3", "SO2", "PM2.5", "PM10"]
+    variables = ["CO", "NO2", "PM2.5", "SO2", "O3", "PM10"]
 
     fig_data, axs_data = plt.subplots(nrows=3, ncols=2, figsize=(25, 25))
 
     for idx, variable in enumerate(variables):
         print(variable)
         if not is_multi_t:
-            df = read_data(data_path)
+            df = read_data(data_path).iloc[:plotted_n_hours, :]
             (
                 seq_da_ratio,
                 _,
@@ -181,7 +194,7 @@ def test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out):
                 seq_err_assimilated,
             ) = run_assimilation(df, variable, t_in1, t_in2, s_in1, s_in2, t_out, s_out)
         else:
-            df = prepare_daily_data(variable, data_path)
+            df = prepare_daily_data(variable, data_path).iloc[:plotted_n_hours, :]
             (
                 da_dh_ratio,
                 seq_dh_ratio,
@@ -214,7 +227,7 @@ def test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out):
             axs_data[idx % 3, idx % 2],
             da_scenario,
             seq_scenario,
-            "Liivalaia (Tallinn, Estonia)",
+            get_location_name(variable),
         )
 
         print_metrics_seq(
@@ -229,7 +242,7 @@ def test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out):
         )
 
     scenario_id = f"da{'3' if not is_multi_t else '4'}-{'1' if s_out == 'obs' else '2'}"
-    fig_data.savefig(f"plots/Liivalaia/Sequential/data-{scenario_id}.png")
+    fig_data.savefig(f"{output_path}/data-{scenario_id}.png")
 
 
 def test_variable_Europe_AQ(
@@ -303,9 +316,27 @@ def generate_tests(is_multi_t, s_out):
         f"Scales: {'hourly' if not is_multi_t else 'daily to hourly'}, {'model to station' if s_out == 'obs' else 'station to model'}"
     )
 
-    # For Liivalaia
+    # For Liivalaia (Tallinn, Estonia)
     # print('Liivalaia')
-    # test_Liivalaia(t_in1, t_in2, s_in1, s_in2, t_out, s_out)
+    # data_path = "data/liivalaia_aq_meas_with_forecast.csv"
+    # get_location_name = lambda _: "Liivalaia (Tallinn, Estonia)"
+    # test_single_dataset(data_path, 'plots/Liivalaia/Sequential/', get_location_name, t_in1, t_in2, s_in1, s_in2, t_out, s_out)
+
+    # For Spain/Greece/Paris dataset use the following data path:
+    print("Spain/Greece/Paris dataset")
+    data_path = "data/eu-aq.csv"
+    get_location_name = lambda variable: get_location_by_variable(variable)
+    test_single_dataset(
+        data_path,
+        "plots/EU/Sequential/",
+        get_location_name,
+        t_in1,
+        t_in2,
+        s_in1,
+        s_in2,
+        t_out,
+        s_out,
+    )
 
     # For Europe AQ dataset
     print("European AQ")

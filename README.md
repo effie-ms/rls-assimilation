@@ -6,7 +6,7 @@ algorithms.
 The algorithms are described in the following papers:
  * [Lightweight Assimilation of Open Urban Ambient Air Quality Monitoring Data and Numerical Simulations 
 with Unknown Uncertainty](https://www.researchsquare.com/article/rs-1567264/v2) (experiments from `example1.py`).
- * [Sequential Assimilation of Open European Urban Ambient Air Quality Data of Different Scales with Unknown Uncertainty](#TODO) 
+ * [Lightweight Open Data Assimilation of Pan-European Urban Air Quality](#TODO) 
  (experiments from `example2.py`).
 
 
@@ -45,6 +45,8 @@ After installing the requirements, run the script `example2.py`:
     python example2.py
     
 The script run the experiments and prints the validation results described in the paper.
+The plots are generated for the `data/eu-eq.csv` dataset file. The statistics are collected for the datasets from the 
+`data/Europe_AQ/` directory.
     
 ## Repository content
 

@@ -33,8 +33,8 @@ class SequentialRLSAssimilationOneSource:
             self.ar_model.update(self.last_assimilated, new_obs)
 
             try:
-                k = pred_err_assimilated ** 2 / (
-                    pred_err_assimilated ** 2 + err_new_obs ** 2
+                k = pred_err_assimilated**2 / (
+                    pred_err_assimilated**2 + err_new_obs**2
                 )
             except (ZeroDivisionError, FloatingPointError):
                 k = 1
