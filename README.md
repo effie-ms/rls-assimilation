@@ -38,6 +38,9 @@ The script will generate plots in `plots/Liivalaia/` and print metrics for the a
 `data/liivalaia_aq_meas_with_forecast.csv`. Modify plots' location to `plots/Liivalaia2/` for the winter Tallinn dataset 
 `data/liivalaia_aq_meas_with_forecast2.csv`.
 
+The IoT PM10 sensor data corresponds to the `data/liivalaia_pm10_iot.csv` dataset. The plots for the sensor data are
+located in the `plots/Liivalaia/IoT` directory.
+
 ### Sequential Assimilation of Open European Urban Ambient Air Quality Data of Different Scales with Unknown Uncertainty
 
 After installing the requirements, run the script `example2.py`:

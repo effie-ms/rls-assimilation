@@ -32,23 +32,24 @@ def print_metrics(
     err_r,
     err_assimilated,
     scenario,
+    obs_source_title="Station",
 ):
     s1[np.isnan(s1)] = 0
     s2[np.isnan(s2)] = 0
 
     # Root Mean Squared Errors
-    print(f"RMSE (Station and Model): {get_rmse(s1, s2)}")
-    print(f"RMSE (Station and {scenario}): {get_rmse(s1, assimilated)}")
+    print(f"RMSE ({obs_source_title} and Model): {get_rmse(s1, s2)}")
+    print(f"RMSE ({obs_source_title} and {scenario}): {get_rmse(s1, assimilated)}")
     print(f"RMSE (Model and {scenario}): {get_rmse(s2, assimilated)}")
 
     # Mean Absolute Uncertainties
-    print(f"MAU (Station): {np.mean(np.abs(err1_ar)).round(2)}")
+    print(f"MAU ({obs_source_title}): {np.mean(np.abs(err1_ar)).round(2)}")
     print(f"MAU (Model): {np.mean(np.abs(err2_ar)).round(2)}")
 
-    if scenario == "DA3 (Model -> Station)":
+    if scenario == f"DA3 (Model -> {obs_source_title})":
         print(f"MAU (Model calibrated): {np.mean(np.abs(err_r)).round(2)}")
-    elif scenario == "DA3 (Station -> Model)":
-        print(f"MAU (Station calibrated): {np.mean(np.abs(err_r)).round(2)}")
+    elif scenario == f"DA3 ({obs_source_title} -> Model)":
+        print(f"MAU ({obs_source_title} calibrated): {np.mean(np.abs(err_r)).round(2)}")
 
     print(f"MAU ({scenario}): {np.mean(np.abs(err_assimilated)).round(2)}")
 
@@ -60,12 +61,15 @@ def plot_data(
     variable,
     ax_data,
     scenario,
+    obs_source_title="Station",
+    obs_source_color="red",
+    with_legend=True,
 ):
     ax_data.set_title(f"{variable}")
     ax_data.plot(
         s1.index,
         s1.values,
-        color="red",
+        color=obs_source_color,
         marker="X",
         linewidth=0,
         markersize=6,
@@ -93,10 +97,10 @@ def plot_data(
         if n % every_nth != 1:
             label.set_visible(False)
 
-    if variable == "CO":
+    if with_legend:
         ax_data.legend(
             [
-                "Station",
+                obs_source_title,
                 "Model",
                 scenario,
             ]
