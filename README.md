@@ -5,7 +5,8 @@ algorithms.
  
 The algorithms are described in the following papers:
  * [Lightweight Assimilation of Open Urban Ambient Air Quality Monitoring Data and Numerical Simulations 
-with Unknown Uncertainty](https://www.researchsquare.com/article/rs-1567264/v2) (experiments from `example1.py`).
+with Unknown Uncertainty](https://link.springer.com/article/10.1007/s10666-023-09909-x), DOI: 10.1007/s10666-023-09909-x 
+(experiments from `example1.py`).
  * [Lightweight Open Data Assimilation of Pan-European Urban Air Quality](#TODO) 
  (experiments from `example2.py`).
 
